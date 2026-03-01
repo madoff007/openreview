@@ -1,6 +1,7 @@
 import { Sandbox } from "@vercel/sandbox";
 
 import { createAgent } from "@/lib/agent";
+import { bot } from "@/lib/bot";
 import { parseError } from "@/lib/error";
 import type { ThreadMessage } from "@/workflow";
 
@@ -24,6 +25,9 @@ export const runAgent = async (
   });
 
   try {
+    const adapter = bot.getAdapter("github");
+    await adapter.startTyping(threadId, "Reviewing...");
+
     const agent = await createAgent(sandbox, threadId, diff);
 
     await agent.generate({
