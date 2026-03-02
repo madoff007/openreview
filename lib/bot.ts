@@ -58,7 +58,7 @@ export const bot = new Chat({
 });
 
 const handleMention = async (thread: Thread, message: Message) => {
-  await message.react(emoji.eyes);
+  await thread.adapter.addReaction(thread.id, message.id, emoji.eyes);
 
   const messages = await collectMessages(thread);
   const raw = message.raw as GitHubRawMessage;
