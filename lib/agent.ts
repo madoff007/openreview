@@ -1,9 +1,9 @@
-import { Sandbox } from "@vercel/sandbox";
 import { DurableAgent } from "@workflow/ai/agent";
-import { tool } from "ai";
-import { z } from "zod";
 
-import { addPRComment } from "@/workflow/steps/add-pr-comment";
+import { createBashTool } from "@/lib/tools/bash";
+import { createReadFileTool } from "@/lib/tools/read-file";
+import { createReplyTool } from "@/lib/tools/reply";
+import { createWriteFileTool } from "@/lib/tools/write-file";
 
 const instructions = `You are an expert software engineering assistant working inside a sandbox with a git repository checked out on a PR branch.
 
@@ -59,105 +59,6 @@ Based on the user's request, decide what to do. Your capabilities include:
 \`\`\`diff
 {{DIFF}}
 \`\`\``;
-
-const SANDBOX_CWD = "./workspace";
-
-const createBashTool = (sandboxId: string) =>
-  tool({
-    description: [
-      "Execute bash commands in the sandbox environment.",
-      "",
-      `WORKING DIRECTORY: ${SANDBOX_CWD}`,
-      "All commands execute from this directory. Use relative paths from here.",
-      "",
-      "Common operations:",
-      "  ls -la              # List files with details",
-      "  find . -name '*.ts' # Find files by pattern",
-      "  grep -r 'pattern' . # Search file contents",
-      "  cat <file>          # View file contents",
-    ].join("\n"),
-    execute: async ({ command }) => {
-      "use step";
-
-      const sandbox = await Sandbox.get({ sandboxId });
-      const fullCommand = `cd "${SANDBOX_CWD}" && ${command}`;
-      const result = await sandbox.runCommand("bash", ["-c", fullCommand]);
-      const [stdout, stderr] = await Promise.all([
-        result.stdout(),
-        result.stderr(),
-      ]);
-
-      return { exitCode: result.exitCode, stderr, stdout };
-    },
-    inputSchema: z.object({
-      command: z.string().describe("The bash command to execute"),
-    }),
-  });
-
-const createReadFileTool = (sandboxId: string) =>
-  tool({
-    description: "Read the contents of a file from the sandbox.",
-    execute: async ({ path }) => {
-      "use step";
-
-      const sandbox = await Sandbox.get({ sandboxId });
-      const resolvedPath = path.startsWith("/")
-        ? path
-        : `${SANDBOX_CWD}/${path}`;
-
-      const buffer = await sandbox.readFileToBuffer({ path: resolvedPath });
-
-      if (buffer === null) {
-        throw new Error(`File not found: ${resolvedPath}`);
-      }
-
-      const content = buffer.toString("utf8");
-
-      return { content };
-    },
-    inputSchema: z.object({
-      path: z.string().describe("The path to the file to read"),
-    }),
-  });
-
-const createWriteFileTool = (sandboxId: string) =>
-  tool({
-    description:
-      "Write content to a file in the sandbox. Creates parent directories if needed.",
-    execute: async ({ content, path }) => {
-      "use step";
-
-      const sandbox = await Sandbox.get({ sandboxId });
-      const resolvedPath = path.startsWith("/")
-        ? path
-        : `${SANDBOX_CWD}/${path}`;
-
-      await sandbox.writeFiles([
-        { content: Buffer.from(content), path: resolvedPath },
-      ]);
-
-      return { success: true };
-    },
-    inputSchema: z.object({
-      content: z.string().describe("The content to write to the file"),
-      path: z.string().describe("The path where the file should be written"),
-    }),
-  });
-
-const createReplyTool = (threadId: string) =>
-  tool({
-    description:
-      "Post a comment on the pull request. Use this to share your findings, ask questions, or report results.",
-    execute: async ({ body }) => {
-      "use step";
-
-      await addPRComment(threadId, body);
-      return { success: true };
-    },
-    inputSchema: z.object({
-      body: z.string().describe("The markdown-formatted comment body to post"),
-    }),
-  });
 
 export const createAgent = (
   sandboxId: string,
