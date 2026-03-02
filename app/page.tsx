@@ -78,12 +78,7 @@ export const DeployButton = () => {
   url.searchParams.set("skippable-integrations", "0");
 
   return (
-    <a
-      href={url.toString()}
-      target="_blank"
-      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-zinc-950 px-4 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
-      rel="noopener noreferrer"
-    >
+    <a href={url.toString()} target="_blank" rel="noopener noreferrer">
       <Image
         alt="Deploy with Vercel"
         height={32}
@@ -112,12 +107,12 @@ const Page = () => (
         <div className="flex gap-3">
           <DeployButton />
           <a
-            className="inline-flex h-10 items-center justify-center rounded-lg border border-zinc-200 px-4 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            className="inline-flex h-8 items-center justify-center rounded-lg border border-zinc-200 px-4 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-900"
             href="https://github.com/vercel-labs/openreview"
             rel="noopener noreferrer"
             target="_blank"
           >
-            GitHub
+            Source Code
           </a>
         </div>
       </div>
