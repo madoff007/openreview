@@ -14,6 +14,13 @@ export const getDiff = async (
     });
   });
 
+  await sandbox.runCommand("git", [
+    "fetch",
+    "origin",
+    baseBranch,
+    "--depth=1",
+  ]);
+
   const result = await sandbox.runCommand("git", [
     "diff",
     `origin/${baseBranch}...HEAD`,
