@@ -1,8 +1,11 @@
+import { join } from "node:path";
+
 import type { UIMessageChunk } from "ai";
 import { getWritable } from "workflow";
 
 import { createAgent } from "@/lib/agent";
 import { parseError } from "@/lib/error";
+import { discoverSkills } from "@/lib/skills";
 import type { ThreadMessage } from "@/workflow";
 
 import { startTyping } from "./start-typing";
@@ -22,7 +25,15 @@ export const runAgent = async (
   try {
     await startTyping(threadId, "Reviewing...");
 
-    const agent = createAgent(sandboxId, threadId, prNumber, repoFullName);
+    const skills = await discoverSkills([join(process.cwd(), ".agents/skills")]);
+
+    const agent = createAgent(
+      sandboxId,
+      threadId,
+      prNumber,
+      repoFullName,
+      skills
+    );
 
     await agent.stream({
       maxSteps: 20,

@@ -1,6 +1,9 @@
 import { DurableAgent } from "@workflow/ai/agent";
 
+import type { SkillMetadata } from "@/lib/skills";
+import { buildSkillsPrompt } from "@/lib/skills";
 import { createBashTool } from "@/lib/tools/bash";
+import { createLoadSkillTool } from "@/lib/tools/load-skill";
 import { createReadFileTool } from "@/lib/tools/read-file";
 import { createReplyTool } from "@/lib/tools/reply";
 import { createWriteFileTool } from "@/lib/tools/write-file";
@@ -11,6 +14,7 @@ You have the following tools:
 
 - **bash / readFile / writeFile** — run commands, read and write files inside the sandbox
 - **reply** — post a top-level comment on the pull request
+- **loadSkill** — load specialized review instructions for a specific domain
 
 The \`gh\` CLI is authenticated and available in bash. The current PR is **#{{PR_NUMBER}}** in **{{REPO}}**.
 
@@ -61,17 +65,28 @@ export const createAgent = (
   sandboxId: string,
   threadId: string,
   prNumber: number,
-  repoFullName: string
-) =>
-  new DurableAgent({
-    model: "anthropic/claude-sonnet-4.6",
-    system: instructions
+  repoFullName: string,
+  skills: SkillMetadata[]
+) => {
+  const skillsPrompt = buildSkillsPrompt(skills);
+  const system = [
+    instructions
       .replaceAll("{{PR_NUMBER}}", String(prNumber))
       .replaceAll("{{REPO}}", repoFullName),
+    skillsPrompt,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  return new DurableAgent({
+    model: "anthropic/claude-sonnet-4.6",
+    system,
     tools: {
       bash: createBashTool(sandboxId),
+      loadSkill: createLoadSkillTool(skills),
       readFile: createReadFileTool(sandboxId),
       reply: createReplyTool(threadId),
       writeFile: createWriteFileTool(sandboxId),
     },
   });
+};

@@ -105,18 +105,15 @@ const initBot = async (): Promise<Chat> => {
     ]);
   });
 
-  botInstance.onReaction(
-    [emoji.thumbs_down, emoji.confused],
-    async (event) => {
-      if (!event.added || !event.message?.author.isMe) {
-        return;
-      }
-
-      await event.thread.post(
-        `${emoji.eyes} Got it, skipping that. Mention me with feedback if you'd like a different approach.`
-      );
+  botInstance.onReaction([emoji.thumbs_down, emoji.confused], async (event) => {
+    if (!event.added || !event.message?.author.isMe) {
+      return;
     }
-  );
+
+    await event.thread.post(
+      `${emoji.eyes} Got it, skipping that. Mention me with feedback if you'd like a different approach.`
+    );
+  });
 
   return botInstance;
 };
@@ -159,4 +156,3 @@ const handleMention = async (thread: Thread, message: Message) => {
     } satisfies WorkflowParams,
   ]);
 };
-
