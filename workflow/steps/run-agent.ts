@@ -1,13 +1,11 @@
-import { join } from "node:path";
-
 import type { UIMessageChunk } from "ai";
 import { getWritable } from "workflow";
 
 import { createAgent } from "@/lib/agent";
 import { parseError } from "@/lib/error";
-import { discoverSkills } from "@/lib/skills";
 import type { ThreadMessage } from "@/workflow";
 
+import { discoverSkills } from "./discover-skills";
 import { startTyping } from "./start-typing";
 
 export interface AgentResult {
@@ -25,7 +23,7 @@ export const runAgent = async (
   try {
     await startTyping(threadId, "Reviewing...");
 
-    const skills = await discoverSkills([join(process.cwd(), ".agents/skills")]);
+    const skills = await discoverSkills([".agents/skills"]);
 
     const agent = createAgent(
       sandboxId,
