@@ -15,7 +15,7 @@ An open-source, self-hosted AI code review bot. Deploy to Vercel, connect a GitH
 - **Reactions** — React with 👍 or ❤️ to approve suggestions, or 👎 or 😕 to skip
 - **Durable workflows** — Built on [Vercel Workflow](https://vercel.com/docs/workflow) for reliable, resumable execution
 - **Extensible skills** — Ships with built-in review [skills](https://skills.sh) and supports custom skills via `.agents/skills/`
-- **Powered by Claude** — Uses Claude Sonnet 4.6 via the [AI SDK](https://sdk.vercel.ai) for high-quality code analysis
+- **Powered by Claude** — Uses Claude via the [AI SDK](https://sdk.vercel.ai), with support for Anthropic-compatible gateways
 - **Simple route handler** — Easily define route handlers using [Next.js Route Handlers](https://nextjs.org/docs/app/building-your-application/routing/route-handlers) for custom API endpoints and webhooks
 
 ## How it works
@@ -96,12 +96,36 @@ Add the following environment variables to your Vercel project:
 
 | Variable                     | Description                                                            |
 | ---------------------------- | ---------------------------------------------------------------------- |
-| `ANTHROPIC_API_KEY`          | API key for Claude                                                     |
+| `ANTHROPIC_API_KEY`          | Claude API key sent as `x-api-key`                                     |
+| `ANTHROPIC_AUTH_TOKEN`       | Optional bearer token for Anthropic-compatible gateways                |
+| `ANTHROPIC_BASE_URL`         | Optional custom Anthropic API base URL (for proxies / gateways)        |
+| `ANTHROPIC_MODEL`            | Optional Anthropic model id. Defaults to `claude-sonnet-4.6`           |
 | `GITHUB_APP_ID`              | The ID of your GitHub App                                              |
 | `GITHUB_APP_INSTALLATION_ID` | The installation ID for your repository                                |
 | `GITHUB_APP_PRIVATE_KEY`     | The private key generated for your GitHub App (with `\n` for newlines) |
 | `GITHUB_APP_WEBHOOK_SECRET`  | The webhook secret you configured                                      |
 | `REDIS_URL`                  | (Optional) Redis URL for persistent state, falls back to in-memory     |
+
+Notes:
+
+- Official Anthropic: set `ANTHROPIC_API_KEY` and leave `ANTHROPIC_BASE_URL` empty.
+- Anthropic-compatible gateways: set `ANTHROPIC_BASE_URL` plus either `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`.
+- `ANTHROPIC_MODEL` accepts either `claude-sonnet-4.6` or `anthropic/claude-sonnet-4.6` style input. The `anthropic/` prefix is stripped automatically.
+- This project currently uses a single review model, so only `ANTHROPIC_MODEL` is consumed.
+
+Example for `hybgzs`:
+
+```bash
+ANTHROPIC_API_KEY=your_hybgzs_key
+ANTHROPIC_BASE_URL=https://ai.hybgzs.com/claude
+ANTHROPIC_MODEL=claude-sonnet-4-6
+```
+
+Verified on a `hybgzs`-backed upstream route on April 21, 2026:
+
+- `claude-sonnet-4-6` works
+- `claude-haiku-4-5-20251001` works
+- `claude-opus-4-6` was unavailable on the tested upstream route
 
 ### 4. Install the GitHub App
 

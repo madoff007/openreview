@@ -1,5 +1,7 @@
-import { DurableAgent } from "@workflow/ai/agent";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { DurableAgent, type CompatibleLanguageModel } from "@workflow/ai/agent";
 
+import { env } from "@/lib/env";
 import type { SkillMetadata } from "@/lib/skills";
 import { buildSkillsPrompt } from "@/lib/skills";
 import { createBashTool } from "@/lib/tools/bash";
@@ -7,6 +9,28 @@ import { createLoadSkillTool } from "@/lib/tools/load-skill";
 import { createReadFileTool } from "@/lib/tools/read-file";
 import { createReplyTool } from "@/lib/tools/reply";
 import { createWriteFileTool } from "@/lib/tools/write-file";
+
+const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4.6";
+
+const getAnthropicModelId = () =>
+  (env.ANTHROPIC_MODEL ?? DEFAULT_ANTHROPIC_MODEL)
+    .trim()
+    .replace(/^anthropic\//, "");
+
+const getAnthropicAuthToken = () => {
+  if (env.ANTHROPIC_API_KEY) {
+    return undefined;
+  }
+
+  return env.ANTHROPIC_AUTH_TOKEN?.trim() || undefined;
+};
+
+const createAnthropicModel = async (): Promise<CompatibleLanguageModel> =>
+  createAnthropic({
+    apiKey: env.ANTHROPIC_API_KEY?.trim() || undefined,
+    authToken: getAnthropicAuthToken(),
+    baseURL: env.ANTHROPIC_BASE_URL?.trim() || undefined,
+  })(getAnthropicModelId()) as CompatibleLanguageModel;
 
 const instructions = `You are an expert software engineering assistant working inside a sandbox with a git repository checked out on a PR branch.
 
@@ -79,7 +103,7 @@ export const createAgent = (
     .join("\n\n");
 
   return new DurableAgent({
-    model: "anthropic/claude-sonnet-4.6",
+    model: createAnthropicModel,
     system,
     tools: {
       bash: createBashTool(sandboxId),
