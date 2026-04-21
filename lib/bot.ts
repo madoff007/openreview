@@ -3,7 +3,7 @@ import type { GitHubRawMessage } from "@chat-adapter/github";
 import { createGitHubAdapter } from "@chat-adapter/github";
 import { createMemoryState } from "@chat-adapter/state-memory";
 import { createRedisState } from "@chat-adapter/state-redis";
-import { Chat, emoji } from "chat";
+import { Chat, ThreadImpl, deriveChannelId, emoji } from "chat";
 import type { Message, Thread } from "chat";
 import { start } from "workflow/api";
 
@@ -35,11 +35,86 @@ interface ThreadState {
   repoFullName: string;
 }
 
+interface PullRequestAutoReviewEvent {
+  action: string;
+  baseBranch: string;
+  body?: string | null;
+  draft?: boolean;
+  prBranch: string;
+  prNumber: number;
+  repoFullName: string;
+  title: string;
+}
+
+const AUTO_REVIEW_ACTIONS = new Set([
+  "opened",
+  "ready_for_review",
+  "reopened",
+  "synchronize",
+]);
+
 const state = env.REDIS_URL
   ? createRedisState({ url: env.REDIS_URL })
   : createMemoryState();
 
 let botInstance: Chat | null = null;
+
+const createThreadState = (
+  baseBranch: string,
+  prBranch: string,
+  prNumber: number,
+  repoFullName: string
+): ThreadState => ({
+  baseBranch,
+  prBranch,
+  prNumber,
+  repoFullName,
+});
+
+const toStoredThreadState = (
+  threadState: ThreadState
+): Partial<Record<string, unknown>> =>
+  threadState as unknown as Partial<Record<string, unknown>>;
+
+const startReviewWorkflow = async (params: WorkflowParams): Promise<void> => {
+  await start(botWorkflow, [params]);
+};
+
+const createPRThread = async (
+  repoFullName: string,
+  prNumber: number
+): Promise<Thread<ThreadState>> => {
+  const bot = await initBot();
+  const adapter = bot.getAdapter("github");
+  const [owner, repo] = repoFullName.split("/");
+  const threadId = adapter.encodeThreadId({ owner, prNumber, repo });
+
+  return new ThreadImpl<ThreadState>({
+    adapter,
+    channelId: deriveChannelId(adapter, threadId),
+    id: threadId,
+    stateAdapter: bot.getState(),
+  });
+};
+
+const createAutoReviewMessages = ({
+  action,
+  body,
+  title,
+}: PullRequestAutoReviewEvent): ThreadMessage[] => [
+  {
+    content: `Automatically review this pull request after the GitHub \`pull_request.${action}\` event.
+
+Review only. Check for bugs, risky changes, regressions, and missing tests.
+Do not make code changes unless explicitly requested in this pull request thread.
+
+PR title: ${title}
+
+PR body:
+${body?.trim() || "(empty)"}`,
+    role: "user",
+  },
+];
 
 const handleMention = async (thread: Thread, message: Message) => {
   await thread.adapter.addReaction(thread.id, message.id, emoji.eyes);
@@ -59,23 +134,20 @@ const handleMention = async (thread: Thread, message: Message) => {
     repo,
   });
 
-  await thread.setState({
+  await thread.setState(
+    toStoredThreadState(
+      createThreadState(pr.base.ref, pr.head.ref, prNumber, repoFullName)
+    )
+  );
+
+  await startReviewWorkflow({
     baseBranch: pr.base.ref,
+    messages,
     prBranch: pr.head.ref,
     prNumber,
     repoFullName,
-  } satisfies ThreadState);
-
-  await start(botWorkflow, [
-    {
-      baseBranch: pr.base.ref,
-      messages,
-      prBranch: pr.head.ref,
-      prNumber,
-      repoFullName,
-      threadId: thread.id,
-    } satisfies WorkflowParams,
-  ]);
+    threadId: thread.id,
+  } satisfies WorkflowParams);
 };
 
 const initBot = async (): Promise<Chat> => {
@@ -133,13 +205,11 @@ const initBot = async (): Promise<Chat> => {
 
     const messages = await collectMessages(event.thread);
 
-    await start(botWorkflow, [
-      {
-        ...threadState,
-        messages,
-        threadId: event.thread.id,
-      } satisfies WorkflowParams,
-    ]);
+    await startReviewWorkflow({
+      ...threadState,
+      messages,
+      threadId: event.thread.id,
+    } satisfies WorkflowParams);
   });
 
   botInstance.onReaction([emoji.thumbs_down, emoji.confused], async (event) => {
@@ -153,6 +223,53 @@ const initBot = async (): Promise<Chat> => {
   });
 
   return botInstance;
+};
+
+export const handlePullRequestAutoReview = async ({
+  action,
+  baseBranch,
+  body,
+  draft,
+  prBranch,
+  prNumber,
+  repoFullName,
+  title,
+}: PullRequestAutoReviewEvent): Promise<boolean> => {
+  if (!AUTO_REVIEW_ACTIONS.has(action)) {
+    return false;
+  }
+
+  if (draft && action !== "ready_for_review") {
+    return false;
+  }
+
+  const thread = await createPRThread(repoFullName, prNumber);
+
+  await thread.setState(
+    toStoredThreadState(
+      createThreadState(baseBranch, prBranch, prNumber, repoFullName)
+    )
+  );
+
+  await startReviewWorkflow({
+    baseBranch,
+    messages: createAutoReviewMessages({
+      action,
+      baseBranch,
+      body,
+      draft,
+      prBranch,
+      prNumber,
+      repoFullName,
+      title,
+    }),
+    prBranch,
+    prNumber,
+    repoFullName,
+    threadId: thread.id,
+  } satisfies WorkflowParams);
+
+  return true;
 };
 
 export const getBot = (): Promise<Chat> => initBot();
