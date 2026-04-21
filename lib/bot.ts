@@ -46,12 +46,21 @@ interface PullRequestAutoReviewEvent {
   title: string;
 }
 
+interface ManualReviewEvent {
+  instruction?: string;
+  prNumber: number;
+  repoFullName: string;
+}
+
 const AUTO_REVIEW_ACTIONS = new Set([
   "opened",
   "ready_for_review",
   "reopened",
   "synchronize",
 ]);
+
+const DEFAULT_MANUAL_REVIEW_INSTRUCTION =
+  "Review only. Check for bugs, risky changes, regressions, and missing tests. Do not make code changes unless explicitly requested in the pull request thread.";
 
 const state = env.REDIS_URL
   ? createRedisState({ url: env.REDIS_URL })
@@ -107,6 +116,30 @@ const createAutoReviewMessages = ({
 
 Review only. Check for bugs, risky changes, regressions, and missing tests.
 Do not make code changes unless explicitly requested in this pull request thread.
+
+PR title: ${title}
+
+PR body:
+${body?.trim() || "(empty)"}`,
+    role: "user",
+  },
+];
+
+const createManualReviewMessages = ({
+  instruction,
+  body,
+  prNumber,
+  title,
+}: {
+  body?: string | null;
+  instruction?: string;
+  prNumber: number;
+  title: string;
+}): ThreadMessage[] => [
+  {
+    content: `Manually review pull request #${prNumber}.
+
+${instruction?.trim() || DEFAULT_MANUAL_REVIEW_INSTRUCTION}
 
 PR title: ${title}
 
@@ -270,6 +303,43 @@ export const handlePullRequestAutoReview = async ({
   } satisfies WorkflowParams);
 
   return true;
+};
+
+export const handleManualReview = async ({
+  instruction,
+  prNumber,
+  repoFullName,
+}: ManualReviewEvent): Promise<void> => {
+  const octokit = await getInstallationOctokit();
+  const [owner, repo] = repoFullName.split("/");
+
+  const { data: pr } = await octokit.rest.pulls.get({
+    owner,
+    pull_number: prNumber,
+    repo,
+  });
+
+  const thread = await createPRThread(repoFullName, prNumber);
+
+  await thread.setState(
+    toStoredThreadState(
+      createThreadState(pr.base.ref, pr.head.ref, prNumber, repoFullName)
+    )
+  );
+
+  await startReviewWorkflow({
+    baseBranch: pr.base.ref,
+    messages: createManualReviewMessages({
+      body: pr.body,
+      instruction,
+      prNumber,
+      title: pr.title,
+    }),
+    prBranch: pr.head.ref,
+    prNumber,
+    repoFullName,
+    threadId: thread.id,
+  } satisfies WorkflowParams);
 };
 
 export const getBot = (): Promise<Chat> => initBot();

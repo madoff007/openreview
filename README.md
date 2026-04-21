@@ -104,6 +104,7 @@ Add the following environment variables to your Vercel project:
 | `GITHUB_APP_INSTALLATION_ID` | The installation ID for your repository                                |
 | `GITHUB_APP_PRIVATE_KEY`     | The private key generated for your GitHub App (with `\n` for newlines) |
 | `GITHUB_APP_WEBHOOK_SECRET`  | The webhook secret you configured                                      |
+| `OPENREVIEW_TRIGGER_TOKEN`   | Optional bearer token for the manual `POST /api/review` trigger        |
 | `REDIS_URL`                  | (Optional) Redis URL for persistent state, falls back to in-memory     |
 
 Notes:
@@ -112,6 +113,7 @@ Notes:
 - Anthropic-compatible gateways: set `ANTHROPIC_BASE_URL` plus either `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN`.
 - `ANTHROPIC_MODEL` accepts either `claude-sonnet-4.6` or `anthropic/claude-sonnet-4.6` style input. The `anthropic/` prefix is stripped automatically.
 - This project currently uses a single review model, so only `ANTHROPIC_MODEL` is consumed.
+- Set `OPENREVIEW_TRIGGER_TOKEN` if you want to trigger reviews from an external controller or another agent via `POST /api/review`.
 
 Example for `hybgzs`:
 
@@ -142,6 +144,38 @@ Install the GitHub App on the repositories you want OpenReview to monitor. Once 
 ```
 
 **Reactions**: React with 👍 or ❤️ on an OpenReview comment to approve and apply its suggestions. React with 👎 or 😕 to skip.
+
+### Manual trigger API
+
+You can also trigger a review without posting a PR comment by calling `POST /api/review`.
+
+This endpoint requires `OPENREVIEW_TRIGGER_TOKEN` to be set and expects either:
+
+- `Authorization: Bearer <OPENREVIEW_TRIGGER_TOKEN>`
+- `x-openreview-token: <OPENREVIEW_TRIGGER_TOKEN>`
+
+Request body:
+
+```json
+{
+  "repoFullName": "madoff007/k12-alpha-pi-app",
+  "prNumber": 123,
+  "instruction": "Review only. Focus on auth regressions and risky changes."
+}
+```
+
+Example:
+
+```bash
+curl -X POST https://your-deployment.vercel.app/api/review \
+  -H "Authorization: Bearer $OPENREVIEW_TRIGGER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "repoFullName": "madoff007/k12-alpha-pi-app",
+    "prNumber": 123,
+    "instruction": "Review only. Focus on bugs and regression risk."
+  }'
+```
 
 ## Skills
 
