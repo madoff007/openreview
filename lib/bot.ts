@@ -255,6 +255,8 @@ const initBot = async (): Promise<Chat> => {
     );
   });
 
+  await botInstance.initialize();
+
   return botInstance;
 };
 
