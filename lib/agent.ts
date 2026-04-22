@@ -25,12 +25,31 @@ const getAnthropicAuthToken = () => {
   return env.ANTHROPIC_AUTH_TOKEN?.trim() || undefined;
 };
 
-const createAnthropicModel = async (): Promise<CompatibleLanguageModel> =>
-  createAnthropic({
-    apiKey: env.ANTHROPIC_API_KEY?.trim() || undefined,
-    authToken: getAnthropicAuthToken(),
-    baseURL: env.ANTHROPIC_BASE_URL?.trim() || undefined,
-  })(getAnthropicModelId()) as CompatibleLanguageModel;
+const getAnthropicProviderSettings = (): Parameters<
+  typeof createAnthropic
+>[0] => ({
+  apiKey: env.ANTHROPIC_API_KEY?.trim() || undefined,
+  authToken: getAnthropicAuthToken(),
+  baseURL: env.ANTHROPIC_BASE_URL?.trim() || undefined,
+});
+
+// DurableAgent stores the model initializer across workflow steps, so the
+// initializer itself must be a serializable workflow step.
+const createAnthropicModel =
+  (
+    providerSettings: Parameters<typeof createAnthropic>[0],
+    modelId: string
+  ): (() => Promise<CompatibleLanguageModel>) =>
+  async () => {
+    "use step";
+
+    return createAnthropic(providerSettings)(
+      modelId
+    ) as CompatibleLanguageModel;
+  };
+
+const createConfiguredAnthropicModel = () =>
+  createAnthropicModel(getAnthropicProviderSettings(), getAnthropicModelId());
 
 const instructions = `You are an expert software engineering assistant working inside a sandbox with a git repository checked out on a PR branch.
 
@@ -103,7 +122,7 @@ export const createAgent = (
     .join("\n\n");
 
   return new DurableAgent({
-    model: createAnthropicModel,
+    model: createConfiguredAnthropicModel(),
     system,
     tools: {
       bash: createBashTool(sandboxId),
