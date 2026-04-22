@@ -5,12 +5,9 @@ import { parseError } from "@/lib/error";
 import { addPRComment } from "./steps/add-pr-comment";
 import { checkPushAccess } from "./steps/check-push-access";
 import { commitAndPush } from "./steps/commit-and-push";
-import { configureGit } from "./steps/configure-git";
-import { createSandbox } from "./steps/create-sandbox";
-import { extendSandbox } from "./steps/extend-sandbox";
 import { getGitHubToken } from "./steps/get-github-token";
 import { hasUncommittedChanges } from "./steps/has-uncommitted-changes";
-import { installDependencies } from "./steps/install-dependencies";
+import { prepareSandbox } from "./steps/prepare-sandbox";
 import { runAgent } from "./steps/run-agent";
 import { stopSandbox } from "./steps/stop-sandbox";
 
@@ -59,13 +56,9 @@ Please ensure the OpenReview app has access to this repository and branch.
   }
 
   const token = await getGitHubToken();
-  const sandboxId = await createSandbox(repoFullName, token, prBranch);
+  const sandboxId = await prepareSandbox(repoFullName, token, prBranch);
 
   try {
-    await installDependencies(sandboxId);
-    await configureGit(sandboxId, repoFullName, token);
-    await extendSandbox(sandboxId);
-
     const agentResult = await runAgent(
       sandboxId,
       messages,
