@@ -11,11 +11,33 @@ import { createReplyTool } from "@/lib/tools/reply";
 import { createWriteFileTool } from "@/lib/tools/write-file";
 
 const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4.6";
+const DEFAULT_GATEWAY_ANTHROPIC_MODEL = "claude-sonnet-4-6";
 
-const getAnthropicModelId = () =>
-  (env.ANTHROPIC_MODEL ?? DEFAULT_ANTHROPIC_MODEL)
+const getConfiguredAnthropicBaseUrl = () =>
+  env.ANTHROPIC_BASE_URL?.trim() || undefined;
+
+const normalizeGatewayAnthropicModelId = (modelId: string) =>
+  modelId.replace(
+    /^(claude-[a-z-]+)-(\d+)\.(\d+)$/,
+    "$1-$2-$3"
+  );
+
+const getAnthropicModelId = () => {
+  const modelId = (
+    env.ANTHROPIC_MODEL ??
+    (getConfiguredAnthropicBaseUrl()
+      ? DEFAULT_GATEWAY_ANTHROPIC_MODEL
+      : DEFAULT_ANTHROPIC_MODEL)
+  )
     .trim()
     .replace(/^anthropic\//, "");
+
+  if (!getConfiguredAnthropicBaseUrl()) {
+    return modelId;
+  }
+
+  return normalizeGatewayAnthropicModelId(modelId);
+};
 
 const getAnthropicAuthToken = () => {
   if (env.ANTHROPIC_API_KEY) {
@@ -30,7 +52,7 @@ const getAnthropicProviderSettings = (): Parameters<
 >[0] => ({
   apiKey: env.ANTHROPIC_API_KEY?.trim() || undefined,
   authToken: getAnthropicAuthToken(),
-  baseURL: env.ANTHROPIC_BASE_URL?.trim() || undefined,
+  baseURL: getConfiguredAnthropicBaseUrl(),
 });
 
 // DurableAgent stores the model initializer across workflow steps, so the
