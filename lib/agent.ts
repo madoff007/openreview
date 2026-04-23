@@ -1,5 +1,6 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
-import { DurableAgent, type CompatibleLanguageModel } from "@workflow/ai/agent";
+import { DurableAgent } from "@workflow/ai/agent";
+import type { CompatibleLanguageModel } from "@workflow/ai/agent";
 
 import { env } from "@/lib/env";
 import type { SkillMetadata } from "@/lib/skills";
@@ -16,11 +17,11 @@ const DEFAULT_GATEWAY_ANTHROPIC_MODEL = "claude-sonnet-4-6";
 const getConfiguredAnthropicBaseUrl = () =>
   env.ANTHROPIC_BASE_URL?.trim() || undefined;
 
+const getConfiguredAnthropicApiKey = () =>
+  env.ANTHROPIC_API_KEY?.trim() || undefined;
+
 const normalizeGatewayAnthropicModelId = (modelId: string) =>
-  modelId.replace(
-    /^(claude-[a-z-]+)-(\d+)\.(\d+)$/,
-    "$1-$2-$3"
-  );
+  modelId.replace(/^(claude-[a-z-]+)-(\d+)\.(\d+)$/, "$1-$2-$3");
 
 const getAnthropicModelId = () => {
   const modelId = (
@@ -40,8 +41,8 @@ const getAnthropicModelId = () => {
 };
 
 const getAnthropicAuthToken = () => {
-  if (env.ANTHROPIC_API_KEY) {
-    return undefined;
+  if (getConfiguredAnthropicApiKey()) {
+    return;
   }
 
   return env.ANTHROPIC_AUTH_TOKEN?.trim() || undefined;
@@ -50,10 +51,28 @@ const getAnthropicAuthToken = () => {
 const getAnthropicProviderSettings = (): Parameters<
   typeof createAnthropic
 >[0] => ({
-  apiKey: env.ANTHROPIC_API_KEY?.trim() || undefined,
+  apiKey: getConfiguredAnthropicApiKey(),
   authToken: getAnthropicAuthToken(),
   baseURL: getConfiguredAnthropicBaseUrl(),
 });
+
+const logAnthropicConfiguration = (
+  context: string,
+  config: {
+    authToken?: string;
+    baseURL?: string;
+    modelId: string;
+    apiKey?: string;
+  }
+) => {
+  console.info("[agent] anthropic config", {
+    baseURL: config.baseURL ?? null,
+    context,
+    hasApiKey: Boolean(config.apiKey),
+    hasAuthToken: Boolean(config.authToken),
+    modelId: config.modelId,
+  });
+};
 
 // DurableAgent stores the model initializer across workflow steps, so the
 // initializer itself must be a serializable workflow step.
@@ -62,16 +81,30 @@ const createAnthropicModel =
     providerSettings: Parameters<typeof createAnthropic>[0],
     modelId: string
   ): (() => Promise<CompatibleLanguageModel>) =>
-  async () => {
+  () => {
     "use step";
 
-    return createAnthropic(providerSettings)(
-      modelId
-    ) as CompatibleLanguageModel;
+    logAnthropicConfiguration("model-init", {
+      ...providerSettings,
+      modelId,
+    });
+
+    return Promise.resolve(
+      createAnthropic(providerSettings)(modelId) as CompatibleLanguageModel
+    );
   };
 
-const createConfiguredAnthropicModel = () =>
-  createAnthropicModel(getAnthropicProviderSettings(), getAnthropicModelId());
+const createConfiguredAnthropicModel = () => {
+  const providerSettings = getAnthropicProviderSettings();
+  const modelId = getAnthropicModelId();
+
+  logAnthropicConfiguration("create-configured-model", {
+    ...providerSettings,
+    modelId,
+  });
+
+  return createAnthropicModel(providerSettings, modelId);
+};
 
 const instructions = `You are an expert software engineering assistant working inside a sandbox with a git repository checked out on a PR branch.
 
@@ -133,6 +166,11 @@ export const createAgent = (
   repoFullName: string,
   skills: SkillMetadata[]
 ) => {
+  logAnthropicConfiguration("create-agent", {
+    ...getAnthropicProviderSettings(),
+    modelId: getAnthropicModelId(),
+  });
+
   const skillsPrompt = buildSkillsPrompt(skills);
   const system = [
     instructions
