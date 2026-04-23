@@ -81,7 +81,7 @@ const createAnthropicModel =
     providerSettings: Parameters<typeof createAnthropic>[0],
     modelId: string
   ): (() => Promise<CompatibleLanguageModel>) =>
-  () => {
+  async () => {
     "use step";
 
     logAnthropicConfiguration("model-init", {
@@ -89,7 +89,7 @@ const createAnthropicModel =
       modelId,
     });
 
-    return Promise.resolve(
+    return await Promise.resolve(
       createAnthropic(providerSettings)(modelId) as CompatibleLanguageModel
     );
   };
